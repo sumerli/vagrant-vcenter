@@ -18,6 +18,8 @@ module VagrantPlugins
           config = env[:machine].provider_config
           vm_name = env[:machine].name
 
+          @logger.debug("config: #{config.pretty_inspect}")
+
           # FIXME: Raise a correct exception
           dc = config.vcenter_cnx.serviceInstance.find_datacenter(
             config.datacenter_name) or abort 'datacenter not found'
@@ -52,6 +54,22 @@ module VagrantPlugins
           # FIXME: Raise a correct exception
           template = dc.find_vm(
                         box_to_search) or abort 'VM not found'
+
+          # BJ Fix - delete VLAN before adding new one
+          # if config.vm_network_name1 or config.vm_network_name2
+          #   dnic = template.config.hardware.device.grep(RbVmomi::VIM::VirtualEthernetCard).first
+          #   if dnic
+          #     spec = RbVmomi::VIM.VirtualMachineConfigSpec({
+          #       :deviceChange => [{
+          #         :operation => :remove,
+          #         :device => dnic
+          #       }]
+          #     })
+          #     @logger.debug('attempt to delete #{dnic.pretty_inspect}')
+          #     template.ReconfigVM_Task(:spec => spec).wait_for_completion
+          #     @logger.debug('deleted #{dnic.pretty_inspect}')
+          #   end
+          # end          
 
           if config.linked_clones
             @logger.debug('DOING LINKED CLONE!')
@@ -101,30 +119,54 @@ module VagrantPlugins
                  :powerOn => false,
                  :template => false)
           
-          if config.vm_network_name or config.num_cpu or config.memory
+          if config.vm_network_name1 or config.vm_network_name2 or config.num_cpu or config.memory
             config_spec = RbVmomi::VIM.VirtualMachineConfigSpec
             config_spec.numCPUs = config.num_cpu if config.num_cpu
             config_spec.memoryMB = config.memory if config.memory
-          
-            if config.vm_network_name
+
+            if config.vm_network_name1
+              config_spec.deviceChange = []
+              dnic = template.config.hardware.device.grep(RbVmomi::VIM::VirtualEthernetCard).first
+              if dnic
+                dev_spec = RbVmomi::VIM.VirtualDeviceConfigSpec(:device => dnic, :operation => "remove")
+                config_spec.deviceChange << dev_spec
+              end
+
               # First we must find the specified network
-              network = dc.network.find { |f| f.name == config.vm_network_name } or
-                  abort "Could not find network with name #{config.vm_network_name} to join vm to" 
-              card = template.config.hardware.device.grep(
-                         RbVmomi::VIM::VirtualEthernetCard).first or 
-                         abort "could not find network card to customize"
+              network = dc.network.find { |f| f.name == config.vm_network_name1 } or abort "Could not find network with name #{config.vm_network_name1} to join vm to" 
+              card = RbVmomi::VIM::VirtualVmxnet3( :key => 0, 
+                                                   :deviceInfo => {
+                                                   :label => "HE VLAN", 
+                                                  :summary => "HE VLAN"} )
               if config.vm_network_type == "DistributedVirtualSwitchPort"
-                switch_port = RbVmomi::VIM.DistributedVirtualSwitchPortConnection(
-                              :switchUuid => network.config.distributedVirtualSwitch.uuid,
-                              :portgroupKey => network.key)
-                card.backing = RbVmomi::VIM.VirtualEthernetCardDistributedVirtualPortBackingInfo(
-                               :port => switch_port)
+                switch_port = RbVmomi::VIM.DistributedVirtualSwitchPortConnection( :switchUuid => network.config.distributedVirtualSwitch.uuid,
+                                                                                   :portgroupKey => network.key)
+                card.backing = RbVmomi::VIM.VirtualEthernetCardDistributedVirtualPortBackingInfo(:port => switch_port)
               end 
-              dev_spec = RbVmomi::VIM.VirtualDeviceConfigSpec(:device => card, :operation => "edit")
-              config_spec.deviceChange = [dev_spec]
+              dev_spec = RbVmomi::VIM.VirtualDeviceConfigSpec(:device => card, :operation => "add")
+              config_spec.deviceChange << dev_spec
+              @logger.debug("config_spec.deviceChange (add HE_VLAN) #{config_spec.deviceChange.pretty_inspect}")
+            end
+            
+            if config.vm_network_name2
+              # First we must find the specified network
+              network = dc.network.find { |f| f.name == config.vm_network_name2 } or abort "Could not find network with name #{config.vm_network_name2} to join vm to" 
+              card = RbVmomi::VIM::VirtualVmxnet3( :key => 0, 
+                                                   :deviceInfo => {
+                                                   :label => "Corporate NIC", 
+                                                  :summary => "Corporate NIC"} )
+              if config.vm_network_type == "DistributedVirtualSwitchPort"
+                switch_port = RbVmomi::VIM.DistributedVirtualSwitchPortConnection( :switchUuid => network.config.distributedVirtualSwitch.uuid,
+                                                                                   :portgroupKey => network.key)
+                card.backing = RbVmomi::VIM.VirtualEthernetCardDistributedVirtualPortBackingInfo(:port => switch_port)
+              end 
+              dev_spec = RbVmomi::VIM.VirtualDeviceConfigSpec(:device => card, :operation => "add")
+              config_spec.deviceChange << dev_spec
+              @logger.debug("config_spec.deviceChange (add Corporate NIC) #{config_spec.deviceChange.pretty_inspect}")
             end
 
             spec.config = config_spec
+            @logger.debug("spec.config #{spec.config.pretty_inspect}")
           end
 
           if config.enable_vm_customization

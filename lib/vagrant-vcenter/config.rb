@@ -71,7 +71,12 @@ module VagrantPlugins
       # vm network name
       #
       # @return [String]
-      attr_accessor :vm_network_name
+      attr_accessor :vm_network_name1
+
+      # vm network name
+      #
+      # @return [String]
+      attr_accessor :vm_network_name2
 
       # vm network type
       # only supported network type

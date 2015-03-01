@@ -68,15 +68,10 @@ module VagrantPlugins
       # @return [Bool]
       attr_accessor :disable_auto_vm_name
 
-      # vm network name
+      # vm network names
       #
       # @return [String]
-      attr_accessor :vm_network_name1
-
-      # vm network name
-      #
-      # @return [String]
-      attr_accessor :vm_network_name2
+      attr_accessor :vm_network_names
 
       # vm network type
       # only supported network type

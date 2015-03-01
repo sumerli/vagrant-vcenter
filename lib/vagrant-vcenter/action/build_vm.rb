@@ -55,22 +55,6 @@ module VagrantPlugins
           template = dc.find_vm(
                         box_to_search) or abort 'VM not found'
 
-          # BJ Fix - delete VLAN before adding new one
-          # if config.vm_network_name1 or config.vm_network_name2
-          #   dnic = template.config.hardware.device.grep(RbVmomi::VIM::VirtualEthernetCard).first
-          #   if dnic
-          #     spec = RbVmomi::VIM.VirtualMachineConfigSpec({
-          #       :deviceChange => [{
-          #         :operation => :remove,
-          #         :device => dnic
-          #       }]
-          #     })
-          #     @logger.debug('attempt to delete #{dnic.pretty_inspect}')
-          #     template.ReconfigVM_Task(:spec => spec).wait_for_completion
-          #     @logger.debug('deleted #{dnic.pretty_inspect}')
-          #   end
-          # end          
-
           if config.linked_clones
             @logger.debug('DOING LINKED CLONE!')
             # The API for linked clones is quite strange. We can't create a
@@ -119,12 +103,12 @@ module VagrantPlugins
                  :powerOn => false,
                  :template => false)
           
-          if config.vm_network_name1 or config.vm_network_name2 or config.num_cpu or config.memory
+          if config.vm_network_names or config.num_cpu or config.memory
             config_spec = RbVmomi::VIM.VirtualMachineConfigSpec
             config_spec.numCPUs = config.num_cpu if config.num_cpu
             config_spec.memoryMB = config.memory if config.memory
 
-            if config.vm_network_name1
+            if config.vm_network_names
               config_spec.deviceChange = []
               dnic = template.config.hardware.device.grep(RbVmomi::VIM::VirtualEthernetCard).first
               if dnic
@@ -132,84 +116,64 @@ module VagrantPlugins
                 config_spec.deviceChange << dev_spec
               end
 
-              # First we must find the specified network
-              network = dc.network.find { |f| f.name == config.vm_network_name1 } or abort "Could not find network with name #{config.vm_network_name1} to join vm to" 
-              card = RbVmomi::VIM::VirtualVmxnet3( :key => 0, 
-                                                   :deviceInfo => {
-                                                   :label => "HE VLAN", 
-                                                  :summary => "HE VLAN"} )
-              if config.vm_network_type == "DistributedVirtualSwitchPort"
-                switch_port = RbVmomi::VIM.DistributedVirtualSwitchPortConnection( :switchUuid => network.config.distributedVirtualSwitch.uuid,
+              config.vm_network_names.each do |vm_network_name|
+                # First we must find the specified network
+                @logger.debug("vm_network_name #{vm_network_name}")
+                network = dc.network.find { |f| f.name == vm_network_name } or abort "Could not find network with name #{vm_network_name} to join vm to" 
+                card = RbVmomi::VIM::VirtualVmxnet3( :key => 0, 
+                                                     :deviceInfo => {
+                                                     :label => vm_network_name, 
+                                                     :summary => vm_network_name} )
+                if config.vm_network_type == "DistributedVirtualSwitchPort"
+                  switch_port = RbVmomi::VIM.DistributedVirtualSwitchPortConnection( :switchUuid => network.config.distributedVirtualSwitch.uuid,
                                                                                    :portgroupKey => network.key)
-                card.backing = RbVmomi::VIM.VirtualEthernetCardDistributedVirtualPortBackingInfo(:port => switch_port)
-              end 
-              dev_spec = RbVmomi::VIM.VirtualDeviceConfigSpec(:device => card, :operation => "add")
-              config_spec.deviceChange << dev_spec
-              @logger.debug("config_spec.deviceChange (add HE_VLAN) #{config_spec.deviceChange.pretty_inspect}")
-            end
-            
-            if config.vm_network_name2
-              # First we must find the specified network
-              network = dc.network.find { |f| f.name == config.vm_network_name2 } or abort "Could not find network with name #{config.vm_network_name2} to join vm to" 
-              card = RbVmomi::VIM::VirtualVmxnet3( :key => 0, 
-                                                   :deviceInfo => {
-                                                   :label => "Corporate NIC", 
-                                                  :summary => "Corporate NIC"} )
-              if config.vm_network_type == "DistributedVirtualSwitchPort"
-                switch_port = RbVmomi::VIM.DistributedVirtualSwitchPortConnection( :switchUuid => network.config.distributedVirtualSwitch.uuid,
-                                                                                   :portgroupKey => network.key)
-                card.backing = RbVmomi::VIM.VirtualEthernetCardDistributedVirtualPortBackingInfo(:port => switch_port)
-              end 
-              dev_spec = RbVmomi::VIM.VirtualDeviceConfigSpec(:device => card, :operation => "add")
-              config_spec.deviceChange << dev_spec
-              @logger.debug("config_spec.deviceChange (add Corporate NIC) #{config_spec.deviceChange.pretty_inspect}")
-            end
-
+                  card.backing = RbVmomi::VIM.VirtualEthernetCardDistributedVirtualPortBackingInfo(:port => switch_port)
+                end 
+                dev_spec = RbVmomi::VIM.VirtualDeviceConfigSpec(:device => card, :operation => "add")
+                config_spec.deviceChange << dev_spec
+                @logger.debug("config_spec #{config_spec.pretty_inspect}")
+              end
+            end           
             spec.config = config_spec
             @logger.debug("spec.config #{spec.config.pretty_inspect}")
           end
 
+          nic_map = []
+          global_ip_settings = []
           if config.enable_vm_customization
-            public_networks = env[:machine].config.vm.networks.select {
-                                |n| n[0].eql? :public_network
-            }
+            env[:machine].config.vm.networks.each do |type, options|
+              if type == :public_network
+                @logger.debug("type: #{type.inspect} options: #{options.inspect}")
+              
+                # Specify ip but no netmask
+                if options[:ip] && !options[:netmask]
+                  fail Errors::WrongNetworkSpec
+                end
 
-            network_spec = public_networks.first[1] unless public_networks.empty?
+                # specify netmask but no ip
+                if !options[:ip] && options[:netmask]
+                  fail Errors::WrongNetworkSpec
+                end
 
-            @logger.debug("This is our network #{public_networks.inspect}")
+                global_ip_settings = RbVmomi::VIM.CustomizationGlobalIPSettings(
+                      :dnsServerList => options[:dns_server_list],
+                      :dnsSuffixList => options[:dns_suffix_list])
+  
+                # if no ip and no netmask, let's default to dhcp
+                if !options[:ip] && !options[:netmask]
+                  adapter = RbVmomi::VIM.CustomizationIPSettings(
+                            :ip => RbVmomi::VIM.CustomizationDhcpIpGenerator())
+                else
+                  adapter = RbVmomi::VIM.CustomizationIPSettings(
+                              :gateway => [options[:gateway]],
+                              :ip => RbVmomi::VIM.CustomizationFixedIp(
+                                  :ipAddress => options[:ip]),
+                              :subnetMask => options[:netmask])
+                end
 
-            if network_spec
-
-              # Check for sanity and validation of network parameters.
-
-              # Specify ip but no netmask
-              if network_spec[:ip] && !network_spec[:netmask]
-                fail Errors::WrongNetworkSpec
+                nic_map << RbVmomi::VIM.CustomizationAdapterMapping(
+                            :adapter => adapter)
               end
-
-              # specify netmask but no ip
-              if !network_spec[:ip] && network_spec[:netmask]
-                fail Errors::WrongNetworkSpec
-              end
-
-              global_ip_settings = RbVmomi::VIM.CustomizationGlobalIPSettings(
-                    :dnsServerList => network_spec[:dns_server_list],
-                    :dnsSuffixList => network_spec[:dns_suffix_list])
-
-              # if no ip and no netmask, let's default to dhcp
-              if !network_spec[:ip] && !network_spec[:netmask]
-                adapter = RbVmomi::VIM.CustomizationIPSettings(
-                          :ip => RbVmomi::VIM.CustomizationDhcpIpGenerator())
-              else
-                adapter = RbVmomi::VIM.CustomizationIPSettings(
-                          :gateway => [network_spec[:gateway]],
-                          :ip => RbVmomi::VIM.CustomizationFixedIp(
-                                :ipAddress => network_spec[:ip]),
-                          :subnetMask => network_spec[:netmask])
-              end
-
-              nic_map = [RbVmomi::VIM.CustomizationAdapterMapping(
-                         :adapter => adapter)]
             end
 
             if config.prep_type.downcase == 'linux'
@@ -237,7 +201,7 @@ module VagrantPlugins
               fail "specification type #{config.prep_type} not supported"
             end
 
-            if prep && network_spec
+            if prep && nic_map
               # If prep and network specification are present, let's do a full config
               cust_spec = RbVmomi::VIM.CustomizationSpec(
                           :globalIPSettings => global_ip_settings,
@@ -246,7 +210,7 @@ module VagrantPlugins
 
               spec.customization = cust_spec
 
-            elsif prep && !network_spec
+            elsif prep && !nic_map
               # If no network specifications, default to dhcp
               global_ip_settings = RbVmomi::VIM.CustomizationGlobalIPSettings(
                 :dnsServerList => [],

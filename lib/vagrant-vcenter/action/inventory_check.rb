@@ -40,11 +40,11 @@ module VagrantPlugins
           @logger.debug("OVF File: #{box_ovf}")
 
           env[:ui].info("Adding [#{box_name}]")
+          rootFolder = config.vcenter_cnx.serviceInstance.content.rootFolder
 
           # FIXME: Raise a correct exception
-          dc = config.vcenter_cnx.serviceInstance.find_datacenter(
-               config.datacenter_name) or fail 'datacenter not found'
-
+        # dc = config.vcenter_cnx.serviceInstance.find_datacenter(config.datacenter_name) or fail 'datacenter not found'
+          dc = rootFolder.childEntity.grep(RbVmomi::VIM::Datacenter).find { |x| x.name == config.datacenter_name } or fail 'datacenter not found'
           root_vm_folder = dc.vmFolder
           vm_folder = root_vm_folder
           if config.template_folder_name.nil?
@@ -91,9 +91,10 @@ module VagrantPlugins
           # Instance and will setup the global environment config values
           config = env[:machine].provider_config
           # FIXME: Raise a correct exception
-          dc = config.vcenter_cnx.serviceInstance.find_datacenter(
-               config.datacenter_name) or fail 'datacenter not found'
 
+          rootFolder = config.vcenter_cnx.serviceInstance.content.rootFolder
+#          dc = config.vcenter_cnx.serviceInstance.find_datacenter(config.datacenter_name) or fail 'datacenter not found'
+           dc = rootFolder.childEntity.grep(RbVmomi::VIM::Datacenter).find { |x| x.name == config.datacenter_name } or fail 'datacenter not found'
           if env[:machine].box.name.to_s.include? '/'
             box_file = env[:machine].box.name.rpartition('/').last.to_s
             box_name = env[:machine].box.name.to_s.gsub(/\//, '-')

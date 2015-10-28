@@ -68,10 +68,10 @@ module VagrantPlugins
       # @return [Bool]
       attr_accessor :disable_auto_vm_name
 
-      # vm network name
+      # vm network names
       #
       # @return [String]
-      attr_accessor :vm_network_name
+      attr_accessor :vm_network_names
 
       # vm network type
       # only supported network type
@@ -93,6 +93,11 @@ module VagrantPlugins
       #
       # @return [String]
       attr_accessor :prep_type
+
+      # Product key to use during Windows customization
+      #
+      # @return [String]
+      attr_accessor :product_key
 
       # num cpu
       #

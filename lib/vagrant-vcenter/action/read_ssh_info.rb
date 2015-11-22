@@ -41,6 +41,7 @@ module VagrantPlugins
 
           # return ip address of first nic
           for net in vm.guest.net
+            @logger.debug("network details: #{net}")
             if net.network == config.vm_network_names[0]
                 address = net.ipConfig.ipAddress[0].ipAddress
                 @logger.debug("Setting ip to first nic's ip: #{address}")

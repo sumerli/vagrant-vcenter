@@ -28,6 +28,18 @@ module VagrantPlugins
           vm = root_vm_folder.findByUuid(env[:machine].id)
 
           address = vm.guest.ipAddress
+
+          # return ip address of first nic
+          if address
+              for net in vm.guest.net
+                @logger.debug("network details: #{net}")
+                if net.network == config.vm_network_names[0]
+                    address = net.ipConfig.ipAddress[0].ipAddress
+                    @logger.debug("Setting ip to first nic's ip: #{address}")
+                end
+              end
+          end
+
           if not address or address == ''
             address = vm.guest_ip
           end
@@ -37,15 +49,6 @@ module VagrantPlugins
             # till the vmware tools supplies the ip address back to vcenter
             @logger.debug('could not find booted guest ipaddress')
             return nil
-          end
-
-          # return ip address of first nic
-          for net in vm.guest.net
-            @logger.debug("network details: #{net}")
-            if net.network == config.vm_network_names[0]
-                address = net.ipConfig.ipAddress[0].ipAddress
-                @logger.debug("Setting ip to first nic's ip: #{address}")
-            end
           end
 
           @logger.debug("Setting nfs_machine_ip to #{address}")

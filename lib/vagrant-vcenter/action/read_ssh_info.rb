@@ -39,6 +39,14 @@ module VagrantPlugins
             return nil
           end
 
+          # return ip address of first nic
+          for net in vm.guest.net
+            if net.network == config.vm_network_names[0]
+                address = net.ipConfig.ipAddress[0].ipAddress
+                @logger.debug("Setting ip to first nic's ip: #{address}")
+            end
+          end
+
           @logger.debug("Setting nfs_machine_ip to #{address}")
           env[:nfs_machine_ip] = address
 

@@ -41,6 +41,9 @@ module VagrantPlugins
 
           if not address or address == ''
             address = vm.guest_ip
+            if address
+                @logger.debug("Setting ip to guest_ip: #{address}")
+            end
           end
 
           if not address or address == ''

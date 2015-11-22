@@ -33,8 +33,10 @@ module VagrantPlugins
           if address
               for net in vm.guest.net
                 if net.network == config.vm_network_names[0]
-                    address = net.ipConfig.ipAddress[0].ipAddress
-                    @logger.debug("Setting ip to first nic's ip: #{address}")
+                    if !net.ipConfig.ipAddress.empty?
+                        address = net.ipConfig.ipAddress[0].ipAddress
+                        @logger.debug("Setting ip to first nic's ip: #{address}")
+                    end
                 end
               end
           end

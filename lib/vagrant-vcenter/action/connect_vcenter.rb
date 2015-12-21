@@ -15,6 +15,15 @@ module VagrantPlugins
         def call(env)
           config = env[:machine].provider_config
           # Avoid recreating a new session each time.
+          if config.vcenter_cnx
+              begin
+                dc = config.vcenter_cnx.serviceInstance.find_datacenter(config.datacenter_name)
+              rescue RbVmomi::Fault
+                # connection may be dead...
+                @logger.debug("vCenter connection is not valid")
+                config.vcenter_cnx = nil
+              end
+          end
           unless config.vcenter_cnx
             @logger.info('Connecting to vCenter...')
 

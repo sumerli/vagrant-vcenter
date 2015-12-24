@@ -31,9 +31,15 @@ module VagrantPlugins
 
           # return ip address of first nic
           if address
+              @logger.debug("address already found: #{address}")
               for net in vm.guest.net
+                @logger.debug("checking network: #{net.network}")
+                @logger.debug("checking vm network name: #{config.vm_network_names[0]}")
                 if net.network == config.vm_network_names[0]
+                    @logger.debug("found a match}")
+                    @logger.debug("checking matched ip: #{net.ipConfig.ipAddress}")
                     if !net.ipConfig.ipAddress.empty?
+                        @logger.debug("checking network: #{net.ipConfig.ipAddress}")
                         address = net.ipConfig.ipAddress[0].ipAddress
                         @logger.debug("Setting ip to first nic's ip: #{address}")
                     end

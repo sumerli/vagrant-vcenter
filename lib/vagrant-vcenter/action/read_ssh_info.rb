@@ -31,11 +31,17 @@ module VagrantPlugins
 
           # return ip address of first nic
           if address
+              if config.network_name
+                # use network_name as the the main interface
+                main_int = config.network_name
+              else
+                main_int = config.vm_network_names[0]
+              end
               @logger.debug("address already found: #{address}")
               for net in vm.guest.net
                 @logger.debug("checking network: #{net.network}")
-                @logger.debug("checking vm network name: #{config.vm_network_names[0]}")
-                if net.network == config.vm_network_names[0]
+                @logger.debug("checking vm network name: #{main_int}")
+                if net.network == main_int
                     @logger.debug("found a match")
                     if !net.ipConfig.ipAddress.empty?
                         address = net.ipConfig.ipAddress[0].ipAddress

@@ -39,7 +39,7 @@ module VagrantPlugins
               end
               @logger.debug("address already found: #{address}")
               for net in vm.guest.net
-                if net.network:
+                if net.network
                     @logger.debug("checking network: #{net.network}")
                     @logger.debug("checking vm network name: #{main_int}")
                     if net.network == main_int

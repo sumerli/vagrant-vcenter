@@ -45,7 +45,7 @@ module VagrantPlugins
                     if net.network == main_int
                         @logger.debug("found a match")
                         @logger.debug("number of ip addresses on the interface: #{net.ipConfig.ipAddress.size}")
-                        @logger.debug("Setting ip to first nic's ip: #{net.ipConfig.ipAddress}")
+                        @logger.debug("Checked nic: #{net.ipConfig}")
                         if net.ipConfig.ipAddress.size > 0
                             for ip in net.ipConfig.ipAddress
                                 if ip.prefixLength == 24 and ip.ipAddress.length > 0

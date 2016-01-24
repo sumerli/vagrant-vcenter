@@ -46,10 +46,14 @@ module VagrantPlugins
                         @logger.debug("found a match")
                         @logger.debug("number of ip addresses on the interface: #{net.ipConfig.ipAddress.size}")
                         @logger.debug("Setting ip to first nic's ip: #{net.ipConfig.ipAddress}")
-                        if !net.ipConfig.ipAddress.empty?
-                            address = net.ipConfig.ipAddress[0].ipAddress
-                            @logger.debug("Setting ip to first nic's ip: #{address}")
-                            break
+                        if net.ipConfig.ipAddress.size > 0
+                            for ip in net.ipConfig.ipAddress
+                                if ip.prefixLength == 24 and !ip.ipAdress.empty
+                                    address = ip.ipAddress
+                                    @logger.debug("Setting ip to first nic's ip: #{address}")
+                                    break
+                                end
+                            end
                         end
                     end
                 end

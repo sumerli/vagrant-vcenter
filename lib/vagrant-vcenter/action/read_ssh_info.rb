@@ -48,7 +48,7 @@ module VagrantPlugins
                         @logger.debug("Setting ip to first nic's ip: #{net.ipConfig.ipAddress}")
                         if net.ipConfig.ipAddress.size > 0
                             for ip in net.ipConfig.ipAddress
-                                if ip.prefixLength == 24 and !ip.ipAddress.blank?
+                                if ip.prefixLength == 24 and ip.ipAddress
                                     address = ip.ipAddress
                                     @logger.debug("Setting ip to first nic's ip: #{address}")
                                     break

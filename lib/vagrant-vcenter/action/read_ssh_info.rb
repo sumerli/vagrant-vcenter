@@ -43,9 +43,12 @@ module VagrantPlugins
                 @logger.debug("checking vm network name: #{main_int}")
                 if net.network == main_int
                     @logger.debug("found a match")
+                    @logger.debug("number of ip addresses on the interface: #{net.ipConfig.ipAddress.size}")
+                    @logger.debug("Setting ip to first nic's ip: #{net.ipConfig.ipAddress}")
                     if !net.ipConfig.ipAddress.empty?
                         address = net.ipConfig.ipAddress[0].ipAddress
                         @logger.debug("Setting ip to first nic's ip: #{address}")
+                        break
                     end
                 end
               end
